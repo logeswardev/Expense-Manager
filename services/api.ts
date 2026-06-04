@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:2020';
+const BASE_URL = 'https://expense-manager-backend-3lxe.onrender.com';
 
 export async function initiateService() {
   const res = await fetch(`${BASE_URL}/initiate`);
@@ -65,8 +65,19 @@ export interface RecentTransactionsResponse {
   items: RecentTransaction[];
 }
 
-export async function fetchRecentTransactions(limit = 4): Promise<RecentTransactionsResponse> {
-  const res = await fetch(`${BASE_URL}/dashboard/transactions/recent?limit=${limit}`);
+export async function fetchRecentTransactions(params: {
+  limit?: number;
+  period?: SummaryPeriod;
+  from?: string;
+  to?: string;
+} = {}): Promise<RecentTransactionsResponse> {
+  const { limit = 4, period, from, to } = params;
+  const qs = new URLSearchParams({ limit: String(limit) });
+  if (period) qs.set('period', period);
+  if (from) qs.set('from', from);
+  if (to) qs.set('to', to);
+
+  const res = await fetch(`${BASE_URL}/dashboard/transactions/recent?${qs.toString()}`);
   if (!res.ok) throw new Error(`recent transactions request failed: ${res.status}`);
   return res.json();
 }
