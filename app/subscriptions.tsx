@@ -1,16 +1,15 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Pressable,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Colors } from '@/constants/theme';
+import React from 'react';
+import {
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 const subscriptions = [
@@ -112,11 +111,6 @@ export default function SubscriptionsScreen() {
           ))}
         </View>
       </ScrollView>
-
-      {/* FAB */}
-      <Pressable style={styles.fab} onPress={() => router.push('/add-expense' as any)}>
-        <Ionicons name="add" size={28} color="#fff" />
-      </Pressable>
     </SafeAreaView>
   );
 }

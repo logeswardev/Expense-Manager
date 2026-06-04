@@ -1,207 +1,434 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Pressable,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Colors } from '@/constants/theme';
+import React from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Circle } from 'react-native-svg';
 
-// ── Data ─────────────────────────────────────────────────────────────────────
-const budgetCategories = [
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+const RING_SIZE = 128;
+const RING_STROKE = 12;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRC = 2 * Math.PI * RING_RADIUS;
+
+const TOTAL_SPENT = 4280.5;
+const BUDGET = 5000;
+const USED_PCT = TOTAL_SPENT / BUDGET; // 0.856
+
+const INSIGHTS: { id: string; title: string; body: string; icon: IoniconsName; iconColor: string; bg: string }[] = [
   {
-    id: '1', name: 'Housing', sub: 'Rent & Utilities', icon: 'home-outline' as const,
-    color: Colors.green, spent: 1200, limit: 1200, status: 'good',
+    id: 'i1',
+    title: 'Dining Increase',
+    body: 'You spent 15% more on dining this month compared to August.',
+    icon: 'trending-up',
+    iconColor: Colors.red,
+    bg: 'rgba(186,26,26,0.10)',
   },
   {
-    id: '2', name: 'Groceries', sub: 'Weekly supplies', icon: 'basket-outline' as const,
-    color: Colors.blue, spent: 225, limit: 500, status: 'good',
-  },
-  {
-    id: '3', name: 'Entertainment', sub: 'Dining & Movies', icon: 'film-outline' as const,
-    color: Colors.amber, spent: 275, limit: 300, status: 'warning',
-  },
-  {
-    id: '4', name: 'Transport', sub: 'Fuel & Repairs', icon: 'car-outline' as const,
-    color: Colors.red, spent: 215.8, limit: 200, status: 'over',
+    id: 'i2',
+    title: 'Saving Opportunity',
+    body: 'Switching to annual billing for Netflix could save you $24/year.',
+    icon: 'wallet-outline',
+    iconColor: Colors.income,
+    bg: Colors.incomeBg,
   },
 ];
 
-function ProgressBar({ spent, limit, status }: { spent: number; limit: number; status: string }) {
-  const pct = Math.min((spent / limit) * 100, 100);
-  const color = status === 'over' ? Colors.red : status === 'warning' ? Colors.amber : Colors.green;
-  const isPaid = spent >= limit && status !== 'over';
-  return (
-    <View style={{ marginTop: 10 }}>
-      {isPaid && (
-        <Text style={[styles.progressStatus, { color: Colors.green, marginBottom: 4 }]}>PAID</Text>
-      )}
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${pct}%` as any, backgroundColor: color }]} />
-      </View>
-      <View style={styles.progressLabels}>
-        {status === 'over' ? (
-          <Text style={[styles.progressStatus, { color: Colors.red }]}>OVER BUDGET</Text>
-        ) : status === 'warning' ? (
-          <Text style={[styles.progressStatus, { color: Colors.amber }]}>NEAR LIMIT</Text>
-        ) : isPaid ? (
-          <View />
-        ) : (
-          <Text style={[styles.progressStatus, { color: Colors.green }]}>SAFE</Text>
-        )}
-        <Text style={styles.progressPct}>{pct.toFixed(0)}% used</Text>
-      </View>
-      {status === 'over' && (
-        <Text style={styles.overAmount}>+${(spent - limit).toFixed(2)}</Text>
-      )}
-    </View>
-  );
+const CATEGORIES: {
+  id: string;
+  name: string;
+  amount: number;
+  pct: number;
+  icon: IoniconsName;
+  iconColor: string;
+  iconBg: string;
+  barColor: string;
+}[] = [
+  { id: 'c1', name: 'Food & Dining', amount: 1240,    pct: 65, icon: 'restaurant-outline', iconColor: '#C2410C', iconBg: '#FFEDD5', barColor: '#F97316' },
+  { id: 'c2', name: 'Groceries',     amount: 840.2,   pct: 42, icon: 'cart-outline',       iconColor: '#15803D', iconBg: '#DCFCE7', barColor: '#22C55E' },
+  { id: 'c3', name: 'Transport',     amount: 320,     pct: 28, icon: 'car-outline',        iconColor: '#1D4ED8', iconBg: '#DBEAFE', barColor: '#3B82F6' },
+];
+
+function formatCad(value: number) {
+  return `$${value.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// ── Screen ────────────────────────────────────────────────────────────────────
-export default function BudgetScreen() {
-  const totalBudget = 3200;
-  const totalSpent = 2415.8;
-  const remaining = totalBudget - totalSpent;
+export default function InsightsScreen() {
+  const remaining = BUDGET - TOTAL_SPENT;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.logoBox}>
-              <Ionicons name="wallet-outline" size={18} color={Colors.green} />
-            </View>
-            <Text style={styles.logoText}>FinanceFlow</Text>
-          </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={18} color={Colors.text} />
+            <Ionicons name="person" size={20} color={Colors.text} />
+          </View>
+          <Text style={styles.title}>Insights</Text>
+        </View>
+        <TouchableOpacity style={styles.iconBtn}>
+          <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        {/* Period selector */}
+        <View style={styles.periodRow}>
+          <Text style={styles.periodLabel}>September 2023</Text>
+          <View style={styles.periodActions}>
+            <TouchableOpacity style={styles.periodChip}>
+              <Ionicons name="calendar-outline" size={14} color={Colors.textSub} />
+              <Text style={styles.periodChipText}>Select Dates</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.periodChip}>
+              <Text style={styles.periodChipText}>Yearly</Text>
+              <Ionicons name="chevron-down" size={14} color={Colors.textSub} />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Budget Summary Card */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Total Monthly Budget</Text>
-          <Text style={styles.summaryAmount}>${totalBudget.toFixed(2)}</Text>
-          <View style={styles.summaryRow}>
-            <View>
-              <Text style={styles.summarySubLabel}>SPENT</Text>
-              <Text style={styles.summarySpent}>${totalSpent.toFixed(2)}</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View>
-              <Text style={styles.summarySubLabel}>REMAINING</Text>
-              <Text style={styles.summaryRemaining}>${remaining.toFixed(2)}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Hero card */}
+        <View style={styles.heroCard}>
+          <Text style={styles.heroLabel}>TOTAL SPENT</Text>
+          <Text style={styles.heroAmount}>{formatCad(TOTAL_SPENT)}</Text>
 
-        {/* Categories */}
-        <View style={styles.categoriesHeader}>
-          <Text style={styles.categoriesTitle}>Categories</Text>
-          <TouchableOpacity style={styles.editBtn}>
-            <Ionicons name="create-outline" size={14} color={Colors.green} />
-            <Text style={styles.editBtnText}>Edit Budgets</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.categoriesList}>
-          {budgetCategories.map((cat, idx) => (
-            <View
-              key={cat.id}
-              style={[styles.catCard, idx < budgetCategories.length - 1 && styles.catBorder]}>
-              <View style={styles.catRow}>
-                <View style={[styles.catIcon, { backgroundColor: cat.color + '22' }]}>
-                  <Ionicons name={cat.icon} size={20} color={cat.color} />
-                </View>
-                <View style={styles.catInfo}>
-                  <Text style={styles.catName}>{cat.name}</Text>
-                  <Text style={styles.catSub}>{cat.sub}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.catSpent}>${cat.spent.toFixed(2)}</Text>
-                  <Text style={styles.catLimit}>of ${cat.limit.toFixed(2)}</Text>
-                </View>
+          <View style={styles.heroBottom}>
+            <View style={styles.ring}>
+              <Svg width={RING_SIZE} height={RING_SIZE}>
+                <Circle
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RING_RADIUS}
+                  stroke="rgba(255,255,255,0.15)"
+                  strokeWidth={RING_STROKE}
+                  fill="none"
+                />
+                <Circle
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RING_RADIUS}
+                  stroke="#FFFFFF"
+                  strokeWidth={RING_STROKE}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray={RING_CIRC}
+                  strokeDashoffset={RING_CIRC * (1 - USED_PCT)}
+                  transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
+                />
+              </Svg>
+              <View style={styles.ringLabel} pointerEvents="none">
+                <Text style={styles.ringPct}>{Math.round(USED_PCT * 100)}%</Text>
               </View>
-              <ProgressBar spent={cat.spent} limit={cat.limit} status={cat.status} />
+            </View>
+
+            <View style={styles.budgetCol}>
+              <View style={styles.budgetRow}>
+                <Text style={styles.budgetLabel}>Budget</Text>
+                <Text style={styles.budgetValue}>{formatCad(BUDGET)}</Text>
+              </View>
+              <View style={styles.budgetTrack}>
+                <View style={[styles.budgetFill, { width: `${USED_PCT * 100}%` }]} />
+              </View>
+              <Text style={styles.budgetCaption}>You have {formatCad(remaining)} remaining</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Smart Insights */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Smart Insights</Text>
+          <Ionicons name="sparkles-outline" size={18} color={Colors.blue} />
+        </View>
+
+        <View style={styles.insightsList}>
+          {INSIGHTS.map((ins) => (
+            <View key={ins.id} style={styles.insightCard}>
+              <View style={[styles.insightIcon, { backgroundColor: ins.bg }]}>
+                <Ionicons name={ins.icon} size={20} color={ins.iconColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.insightTitle}>{ins.title}</Text>
+                <Text style={styles.insightBody}>{ins.body}</Text>
+              </View>
             </View>
           ))}
         </View>
 
-        {/* Bottom Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Ionicons name="trending-down" size={16} color={Colors.red} />
-            <Text style={styles.statLabel}>Vs Last Month</Text>
-            <Text style={[styles.statValue, { color: Colors.red }]}>-12% Spend</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="save-outline" size={16} color={Colors.green} />
-            <Text style={styles.statLabel}>Projected Save</Text>
-            <Text style={[styles.statValue, { color: Colors.green }]}>$420.00</Text>
-          </View>
+        {/* Categories */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Categories</Text>
+          <TouchableOpacity>
+            <Text style={styles.viewDetails}>View Details</Text>
+          </TouchableOpacity>
         </View>
-      </ScrollView>
 
-      {/* FAB */}
-      <Pressable style={styles.fab} onPress={() => router.push('/add-expense' as any)}>
-        <Ionicons name="add" size={28} color="#fff" />
-      </Pressable>
+        <View style={styles.categoryCard}>
+          {CATEGORIES.map((cat, idx) => (
+            <View
+              key={cat.id}
+              style={[styles.catRow, idx < CATEGORIES.length - 1 && styles.catRowDivider]}>
+              <View style={[styles.catIcon, { backgroundColor: cat.iconBg }]}>
+                <Ionicons name={cat.icon} size={20} color={cat.iconColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.catTopRow}>
+                  <Text style={styles.catName}>{cat.name}</Text>
+                  <Text style={styles.catAmount}>{formatCad(cat.amount)}</Text>
+                </View>
+                <View style={styles.catBottomRow}>
+                  <View style={styles.catTrack}>
+                    <View
+                      style={[styles.catFill, { width: `${cat.pct}%`, backgroundColor: cat.barColor }]}
+                    />
+                  </View>
+                  <Text style={styles.catPct}>{cat.pct}%</Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Recurring banner */}
+        <TouchableOpacity
+          style={styles.recurringCard}
+          activeOpacity={0.85}
+          onPress={() => router.push('/subscriptions' as any)}>
+          <View style={styles.recurringLeft}>
+            <View style={styles.recurringIcon}>
+              <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+            </View>
+            <View>
+              <Text style={styles.recurringTitle}>Recurring Bills</Text>
+              <Text style={styles.recurringSub}>4 payments due this week</Text>
+            </View>
+          </View>
+          <View style={styles.recurringBtn}>
+            <Text style={styles.recurringBtnText}>Manage</Text>
+          </View>
+        </TouchableOpacity>
+
+        <View style={{ height: 24 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
+  scroll: { paddingHorizontal: 20, paddingBottom: 24 },
 
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoBox: { width: 34, height: 34, borderRadius: 8, backgroundColor: Colors.cardAlt, alignItems: 'center', justifyContent: 'center' },
-  logoText: { fontSize: 18, fontWeight: '700', color: Colors.text },
-  avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.cardAlt, alignItems: 'center', justifyContent: 'center' },
+  // Header
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.cardAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  title: { fontSize: 22, fontWeight: '700', color: Colors.primary },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.cardAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-  summaryCard: { backgroundColor: Colors.card, borderRadius: 16, padding: 24, marginHorizontal: 20, marginBottom: 20, borderWidth: 1, borderColor: Colors.border },
-  summaryLabel: { color: Colors.textSub, fontSize: 13, marginBottom: 6 },
-  summaryAmount: { color: Colors.text, fontSize: 32, fontWeight: '800', marginBottom: 16 },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 20 },
-  summarySubLabel: { color: Colors.textMuted, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  summarySpent: { color: Colors.red, fontSize: 18, fontWeight: '700' },
-  summaryRemaining: { color: Colors.green, fontSize: 18, fontWeight: '700' },
-  summaryDivider: { width: 1, height: 32, backgroundColor: Colors.border },
+  // Period
+  periodRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  periodLabel: { fontSize: 18, fontWeight: '700', color: Colors.text },
+  periodActions: { flexDirection: 'row', gap: 8 },
+  periodChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.card,
+  },
+  periodChipText: { color: Colors.textSub, fontSize: 12, fontWeight: '600' },
 
-  categoriesHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
-  categoriesTitle: { color: Colors.text, fontSize: 18, fontWeight: '700' },
-  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  editBtnText: { color: Colors.green, fontSize: 13, fontWeight: '600' },
+  // Hero card
+  heroCard: {
+    backgroundColor: Colors.primary,
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  heroLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  heroAmount: { color: '#FFFFFF', fontSize: 40, fontWeight: '800', letterSpacing: -0.5, marginTop: 4 },
+  heroBottom: { flexDirection: 'row', alignItems: 'center', gap: 24, marginTop: 24 },
+  ring: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
+  ringLabel: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  ringPct: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
+  budgetCol: { flex: 1, gap: 8 },
+  budgetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  budgetLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
+  budgetValue: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  budgetTrack: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  budgetFill: { height: '100%', backgroundColor: '#FFFFFF', borderRadius: 999 },
+  budgetCaption: { color: '#B3C5FF', fontSize: 12, fontWeight: '600' },
 
-  categoriesList: { backgroundColor: Colors.card, borderRadius: 16, marginHorizontal: 20, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', marginBottom: 16 },
-  catCard: { padding: 16 },
-  catBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border + '66' },
-  catRow: { flexDirection: 'row', alignItems: 'center' },
-  catIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  catInfo: { flex: 1 },
-  catName: { color: Colors.text, fontSize: 15, fontWeight: '600', marginBottom: 2 },
-  catSub: { color: Colors.textMuted, fontSize: 12 },
-  catSpent: { color: Colors.text, fontSize: 15, fontWeight: '700' },
-  catLimit: { color: Colors.textMuted, fontSize: 12 },
+  // Section
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 28,
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
+  viewDetails: { color: Colors.blue, fontSize: 12, fontWeight: '600' },
 
-  progressTrack: { height: 8, backgroundColor: Colors.cardAlt, borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 4 },
-  progressLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  progressStatus: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  progressPct: { color: Colors.textMuted, fontSize: 11 },
-  overAmount: { color: Colors.red, fontSize: 13, fontWeight: '700', marginTop: 2, textAlign: 'right' },
+  // Insights
+  insightsList: { gap: 12 },
+  insightCard: {
+    flexDirection: 'row',
+    gap: 16,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    padding: 16,
+  },
+  insightIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insightTitle: { color: Colors.text, fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  insightBody: { color: Colors.textSub, fontSize: 13, lineHeight: 18 },
 
-  statsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, marginBottom: 12 },
-  statCard: { flex: 1, backgroundColor: Colors.card, borderRadius: 14, padding: 16, alignItems: 'flex-start', gap: 6, borderWidth: 1, borderColor: Colors.border },
-  statLabel: { color: Colors.textMuted, fontSize: 12 },
-  statValue: { fontSize: 15, fontWeight: '700' },
+  // Categories
+  categoryCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  catRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 16,
+  },
+  catRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.divider,
+  },
+  catIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  catName: { color: Colors.text, fontSize: 15, fontWeight: '700' },
+  catAmount: { color: Colors.text, fontSize: 15, fontWeight: '700' },
+  catBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  catTrack: {
+    flex: 1,
+    height: 6,
+    backgroundColor: Colors.cardAlt,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  catFill: { height: '100%', borderRadius: 999 },
+  catPct: { color: Colors.textSub, fontSize: 12, fontWeight: '600', width: 32, textAlign: 'right' },
 
-  fab: { position: 'absolute', right: 20, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.green, alignItems: 'center', justifyContent: 'center', shadowColor: Colors.green, shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
+  // Recurring
+  recurringCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(225,227,228,0.5)',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: Colors.border,
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 24,
+  },
+  recurringLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  recurringIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  recurringTitle: { color: Colors.text, fontSize: 15, fontWeight: '700' },
+  recurringSub: { color: Colors.textSub, fontSize: 12, marginTop: 2 },
+  recurringBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  recurringBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
+
+  // FAB
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
 });

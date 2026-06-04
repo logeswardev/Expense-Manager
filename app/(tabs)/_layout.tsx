@@ -1,8 +1,8 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { router, Tabs } from 'expo-router';
+import React from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -14,18 +14,31 @@ function TabIcon({ name, activeName, color, focused }: { name: IoniconsName; act
   );
 }
 
+function AddTabButton() {
+  return (
+    <Pressable
+      style={styles.fabWrapper}
+      onPress={() => router.push('/add-expense' as any)}
+      hitSlop={8}>
+      <View style={styles.fab}>
+        <Ionicons name="add" size={28} color="#FFFFFF" />
+      </View>
+    </Pressable>
+  );
+}
+
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.green,
+        tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarStyle: {
-          backgroundColor: Colors.cardDark,
+          backgroundColor: Colors.card,
           borderTopColor: Colors.border,
           borderTopWidth: 1,
-          height: 68,
+          height: 72,
           paddingBottom: 10,
           paddingTop: 8,
         },
@@ -37,9 +50,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
+          title: 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="grid-outline" activeName="grid" color={color} focused={focused} />
+            <TabIcon name="home-outline" activeName="home" color={color} focused={focused} />
           ),
         }}
       />
@@ -53,11 +66,24 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="add"
+        options={{
+          title: '',
+          tabBarButton: () => <AddTabButton />,
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            router.push('/add-expense' as any);
+          },
+        }}
+      />
+      <Tabs.Screen
         name="budget"
         options={{
-          title: 'Budget',
+          title: 'Insights',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="pie-chart-outline" activeName="pie-chart" color={color} focused={focused} />
+            <TabIcon name="stats-chart-outline" activeName="stats-chart" color={color} focused={focused} />
           ),
         }}
       />
@@ -83,6 +109,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   iconActive: {
-    backgroundColor: Colors.green + '25',
+    backgroundColor: Colors.cardAlt,
+  },
+  fabWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fab: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -16,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
 });
