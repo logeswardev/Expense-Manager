@@ -1,13 +1,13 @@
 import ActivityCard from '@/components/activity-card';
 import CalendarModal from '@/components/calendar-modal';
-import { RECENT_ACTIVITY, TIME_FILTERS, TimeFilter } from '@/constants/dashboard';
+import { TIME_FILTERS, TimeFilter } from '@/constants/dashboard';
 import { Colors } from '@/constants/theme';
 import { useDashboard } from '@/hooks/use-dashboard';
 import { styles } from '@/styles/dashboard.styles';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -15,11 +15,55 @@ const RING_SIZE = 120;
 const RING_STROKE = 10;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRC = 2 * Math.PI * RING_RADIUS;
-const BUDGET_PCT = 0.75;
+
+function todayIso() {
+  // Local date (avoids UTC shifting the day).
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function formatCad(value: number) {
+  return `$${(value ?? 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 export default function DashboardScreen() {
-  const { selectedMonth, setSelectedMonth, calVisible, setCalVisible } = useDashboard();
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('Today');
+  const {
+    selectedMonth,
+    setSelectedMonth,
+    calVisible,
+    setCalVisible,
+    me,
+    summary,
+    summaryLoading,
+    loadSummary,
+    recent,
+    trend,
+  } = useDashboard();
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('This month');
+
+  useEffect(() => {
+    if (timeFilter === 'Today') {
+      const t = todayIso();
+      loadSummary({ period: 'range', from: t, to: t });
+    } else if (timeFilter === 'This week') {
+      loadSummary({ period: 'week' });
+    } else if (timeFilter === 'This month') {
+      loadSummary({ period: 'month' });
+    }
+  }, [timeFilter, loadSummary]);
+
+  const usedPct = Math.min(1, Math.max(0, summary?.budget?.usedPct ?? 0));
+  const trendDir = summary?.trend?.direction ?? 'flat';
+  const trendPct = summary?.trend?.pct;
+  const trendLabel = summary?.trend?.label ?? '';
+  const trendSign = trendDir === 'up' ? '+' : trendDir === 'down' ? '-' : '';
+  const trendIcon = trendDir === 'down' ? 'trending-down' : 'trending-up';
+
+  const trendMax = trend.reduce((m, p) => Math.max(m, p.amount), 0) || 1;
+  const trendBars = trend.slice(-5);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -38,7 +82,7 @@ export default function DashboardScreen() {
               <Ionicons name="person" size={20} color={Colors.text} />
             </View>
             <View>
-              <Text style={styles.greeting}>Good morning, Jon</Text>
+              <Text style={styles.greeting}>{me?.greeting ?? 'Welcome'}</Text>
               <Text style={styles.greetingSub}>Track your expenses easily</Text>
             </View>
           </View>
@@ -50,14 +94,20 @@ export default function DashboardScreen() {
         {/* Monthly Spend Hero Card */}
         <View style={styles.spendCard}>
           <View>
-            <Text style={styles.spendLabel}>TOTAL SPEND THIS MONTH</Text>
-            <Text style={styles.spendAmount}>$133,156.85</Text>
+            <Text style={styles.spendLabel}>TOTAL SPEND</Text>
+            <Text style={styles.spendAmount}>
+              {summaryLoading && !summary ? '—' : formatCad(summary?.totalSpend ?? 0)}
+            </Text>
           </View>
 
           <View style={styles.spendBottom}>
             <View style={styles.trendBadge}>
-              <Ionicons name="trending-up" size={12} color="#FFFFFF" />
-              <Text style={styles.trendText}>+12.5% FROM LAST MONTH</Text>
+              <Ionicons name={trendIcon} size={12} color="#FFFFFF" />
+              <Text style={styles.trendText}>
+                {trendPct == null
+                  ? trendLabel || 'NO BASELINE'
+                  : `${trendSign}${Math.abs(trendPct).toFixed(1)}% ${trendLabel}`}
+              </Text>
             </View>
 
             <View style={styles.ring}>
@@ -79,12 +129,12 @@ export default function DashboardScreen() {
                   fill="none"
                   strokeLinecap="round"
                   strokeDasharray={RING_CIRC}
-                  strokeDashoffset={RING_CIRC * (1 - BUDGET_PCT)}
+                  strokeDashoffset={RING_CIRC * (1 - usedPct)}
                   transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
                 />
               </Svg>
               <View style={styles.ringLabel} pointerEvents="none">
-                <Text style={styles.ringPct}>75%</Text>
+                <Text style={styles.ringPct}>{Math.round((summary?.budget?.usedPct ?? 0) * 100)}%</Text>
                 <Text style={styles.ringCaption}>BUDGET</Text>
               </View>
             </View>
@@ -99,7 +149,7 @@ export default function DashboardScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.statLabel}>DAILY AVERAGE</Text>
-              <Text style={styles.statValue}>$4,295.38</Text>
+              <Text style={styles.statValue}>{formatCad(summary?.dailyAverage ?? 0)}</Text>
             </View>
           </View>
 
@@ -109,7 +159,7 @@ export default function DashboardScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.statLabel}>TRANSACTIONS</Text>
-              <Text style={styles.statValue}>24 Items</Text>
+              <Text style={styles.statValue}>{summary?.transactionCount ?? 0} Items</Text>
             </View>
           </View>
         </View>
@@ -135,6 +185,12 @@ export default function DashboardScreen() {
           })}
         </ScrollView>
 
+        {summaryLoading && summary && (
+          <View style={{ paddingVertical: 8, alignItems: 'center' }}>
+            <ActivityIndicator color={Colors.primary} />
+          </View>
+        )}
+
         {/* Recent Activity */}
         <View style={styles.activityHeader}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
@@ -144,16 +200,25 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.activityCard}>
-          {RECENT_ACTIVITY.map((item, idx) => (
-            <ActivityCard
-              key={item.id}
-              merchant={item.merchant}
-              date={item.date}
-              category={item.category}
-              amount={item.amount}
-              isLast={idx === RECENT_ACTIVITY.length - 1}
-            />
-          ))}
+          {recent.length === 0 ? (
+            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+              <Text style={{ color: Colors.textMuted, fontSize: 13 }}>No recent activity</Text>
+            </View>
+          ) : (
+            recent.map((item, idx) => {
+              const signedAmount = item.type === 'expense' ? -Math.abs(item.amount) : Math.abs(item.amount);
+              return (
+                <ActivityCard
+                  key={item.id}
+                  merchant={item.merchant}
+                  date={item.date}
+                  category={item.category}
+                  amount={signedAmount}
+                  isLast={idx === recent.length - 1}
+                />
+              );
+            })
+          )}
         </View>
 
         {/* Smart Insights */}
@@ -168,11 +233,22 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.miniChart}>
-            <View style={[styles.bar, { height: '30%', opacity: 0.2 }]} />
-            <View style={[styles.bar, { height: '50%', opacity: 0.4 }]} />
-            <View style={[styles.bar, { height: '80%', opacity: 0.6 }]} />
-            <View style={[styles.bar, { height: '60%', opacity: 1 }]} />
-            <View style={[styles.bar, { height: '40%', opacity: 0.4 }]} />
+            {(trendBars.length > 0
+              ? trendBars.map((p, i) => ({
+                  key: p.month,
+                  height: `${Math.max(10, Math.round((p.amount / trendMax) * 100))}%` as `${number}%`,
+                  opacity: i === trendBars.length - 1 ? 1 : 0.3 + i * 0.15,
+                }))
+              : [
+                  { key: 'b1', height: '30%' as const, opacity: 0.2 },
+                  { key: 'b2', height: '50%' as const, opacity: 0.4 },
+                  { key: 'b3', height: '80%' as const, opacity: 0.6 },
+                  { key: 'b4', height: '60%' as const, opacity: 1 },
+                  { key: 'b5', height: '40%' as const, opacity: 0.4 },
+                ]
+            ).map((b) => (
+              <View key={b.key} style={[styles.bar, { height: b.height, opacity: b.opacity }]} />
+            ))}
           </View>
         </View>
 
@@ -181,3 +257,4 @@ export default function DashboardScreen() {
     </SafeAreaView>
   );
 }
+
