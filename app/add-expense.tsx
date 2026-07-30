@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Colors } from '@/constants/theme';
+import { addTransaction } from '@/services/api';
 
 // ── Category Data ─────────────────────────────────────────────────────────────
 const expenseCategories = [
@@ -38,6 +39,10 @@ export default function AddExpenseScreen() {
   const [amount, setAmount] = useState('0');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const transactionDate = new Date().toISOString().slice(0, 10);
 
   function handleKey(key: string) {
     if (key === 'backspace') {
@@ -54,6 +59,30 @@ export default function AddExpenseScreen() {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+
+  async function saveTransaction() {
+    const category = expenseCategories.find((item) => item.id === selectedCategory);
+    const numericAmount = Number(amount);
+    if (!category || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setSaveError('Enter an amount and choose a category.');
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await addTransaction({
+        name: notes.trim() || category.label,
+        amount: numericAmount,
+        category: category.label,
+        date: transactionDate,
+      });
+      router.back();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save this transaction.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -101,7 +130,7 @@ export default function AddExpenseScreen() {
           <Text style={styles.fieldLabel}>Date</Text>
           <View style={styles.dateRow}>
             <Ionicons name="calendar-outline" size={16} color={Colors.green} />
-            <Text style={styles.dateText}>October 24, 2023</Text>
+            <Text style={styles.dateText}>{new Date(`${transactionDate}T00:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>
             <Ionicons name="chevron-down" size={16} color={Colors.textSub} style={{ marginLeft: 'auto' }} />
           </View>
         </View>
@@ -142,11 +171,13 @@ export default function AddExpenseScreen() {
 
         {/* Save Button */}
         <TouchableOpacity
-          style={styles.saveBtn}
+          style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
           activeOpacity={0.85}
-          onPress={() => router.back()}>
-          <Text style={styles.saveBtnText}>Save Transaction</Text>
+          disabled={saving}
+          onPress={saveTransaction}>
+          <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Transaction'}</Text>
         </TouchableOpacity>
+        {saveError && <Text style={styles.errorText}>{saveError}</Text>}
       </ScrollView>
     </SafeAreaView>
   );
@@ -185,5 +216,7 @@ const styles = StyleSheet.create({
   notesInput: { backgroundColor: Colors.card, borderRadius: 12, padding: 14, color: Colors.text, fontSize: 15, borderWidth: 1, borderColor: Colors.border, textAlignVertical: 'top', minHeight: 80 },
 
   saveBtn: { marginHorizontal: 20, marginTop: 24, backgroundColor: Colors.green, borderRadius: 14, paddingVertical: 18, alignItems: 'center' },
+  saveBtnDisabled: { opacity: 0.6 },
   saveBtnText: { color: '#000', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  errorText: { color: Colors.red, fontSize: 13, marginHorizontal: 20, marginTop: 10, textAlign: 'center' },
 });

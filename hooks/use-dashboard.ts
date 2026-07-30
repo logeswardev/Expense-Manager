@@ -49,7 +49,7 @@ export function useDashboard() {
   const loadRecent = useCallback(async () => {
     setRecentLoading(true);
     try {
-      const data = await fetchRecentTransactions(4);
+      const data = await fetchRecentTransactions({ limit: 4 });
       setRecent(data.items ?? []);
     } catch (err) {
       console.warn('recent transactions failed', err);

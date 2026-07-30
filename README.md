@@ -1,4 +1,22 @@
-# Welcome to your Expo app 👋
+# Expense Manager
+
+The Expo web app uses a Vercel serverless function to communicate with Notion; it no longer calls the Spring backend.
+
+## Configure Notion
+
+In Vercel, add `NOTION_TOKEN`, `NOTION_TRANSACTIONS_DATA_SOURCE_ID`, and `NOTION_DEFAULT_ACCOUNT` in **Project Settings → Environment Variables**. These are server-only values and never reach the browser. The integration needs access only to the Transactions, Categories, Accounts, and Months databases. The property names must match the current schema: `Name`, `Date`, `Amount`, `Type`, `Categories`, `Accounts`, `Months`, and the `Display Categories` rollup.
+
+The Vercel function is the secure production design: do not put `NOTION_TOKEN` in an `EXPO_PUBLIC_*` variable.
+
+## Deploy to Vercel
+
+1. Push this folder to a GitHub repository and import it at Vercel.
+2. In Vercel, set the **Framework Preset** to `Other`; `vercel.json` runs the Expo web export.
+3. Add the three `NOTION_*` values above for Production, Preview, and Development, then deploy.
+
+Vercel serves the static Expo website and `/api/notion` serverless function together. The Notion token is available only to that function.
+
+## Get started
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
