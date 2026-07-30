@@ -8,9 +8,11 @@ import { Modal, Pressable, ScrollView, Text, TouchableOpacity, View } from 'reac
 interface CalendarModalProps {
   visible: boolean;
   selectedMonth: string;
-  onApply: (month: string) => void;
+  onApply: (range: DateRange) => void;
   onClose: () => void;
 }
+
+export interface DateRange { from: string; to: string; label: string; }
 
 const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const PRESETS = ['Last 7 Days', 'Last 30 Days', 'Year to Date'] as const;
@@ -30,6 +32,10 @@ function shortMonth(monthIdx: number) {
   return MONTHS_FULL[monthIdx].slice(0, 3);
 }
 
+function localIso(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export default function CalendarModal({ visible, selectedMonth, onApply, onClose }: CalendarModalProps) {
   const initialMonthIdx = Math.max(0, MONTHS_FULL.indexOf(selectedMonth));
   const today = new Date();
@@ -39,6 +45,12 @@ export default function CalendarModal({ visible, selectedMonth, onApply, onClose
   const [rangeStart, setRangeStart] = useState<number | null>(1);
   const [rangeEnd, setRangeEnd] = useState<number | null>(15);
   const [preset, setPreset] = useState<Preset | null>('Last 30 Days');
+  const [presetRange, setPresetRange] = useState<DateRange | null>(() => {
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(end.getDate() - 29);
+    return { from: localIso(start), to: localIso(end), label: 'Last 30 Days' };
+  });
 
   const totalDays = daysInMonth(year, monthIdx);
   const blanks = leadingBlanks(year, monthIdx);
@@ -52,6 +64,7 @@ export default function CalendarModal({ visible, selectedMonth, onApply, onClose
 
   function pickDay(day: number) {
     setPreset(null);
+    setPresetRange(null);
     if (rangeStart == null || (rangeStart != null && rangeEnd != null)) {
       setRangeStart(day);
       setRangeEnd(null);
@@ -74,6 +87,8 @@ export default function CalendarModal({ visible, selectedMonth, onApply, onClose
     setYear(y);
     setRangeStart(null);
     setRangeEnd(null);
+    setPreset(null);
+    setPresetRange(null);
   }
 
   const isToday = (day: number) =>
@@ -94,7 +109,21 @@ export default function CalendarModal({ visible, selectedMonth, onApply, onClose
   const dayCount = rangeStart != null && rangeEnd != null ? rangeEnd - rangeStart + 1 : rangeStart != null ? 1 : 0;
 
   function handleApply() {
-    onApply(MONTHS_FULL[monthIdx]);
+    if (presetRange) return onApply(presetRange);
+    if (rangeStart == null) return;
+    const start = new Date(year, monthIdx, rangeStart);
+    const end = new Date(year, monthIdx, rangeEnd ?? rangeStart);
+    onApply({ from: localIso(start), to: localIso(end), label: summaryText });
+  }
+
+  function choosePreset(value: Preset) {
+    const end = new Date();
+    const start = new Date(end);
+    if (value === 'Last 7 Days') start.setDate(end.getDate() - 6);
+    if (value === 'Last 30 Days') start.setDate(end.getDate() - 29);
+    if (value === 'Year to Date') start.setMonth(0, 1);
+    setPreset(value);
+    setPresetRange({ from: localIso(start), to: localIso(end), label: value });
   }
 
   return (
@@ -199,7 +228,7 @@ export default function CalendarModal({ visible, selectedMonth, onApply, onClose
                   <TouchableOpacity
                     key={p}
                     style={[styles.preset, active && styles.presetActive]}
-                    onPress={() => setPreset(p)}>
+                    onPress={() => choosePreset(p)}>
                     <Text style={[styles.presetText, active && styles.presetTextActive]}>{p}</Text>
                   </TouchableOpacity>
                 );

@@ -40,6 +40,7 @@ export default function DashboardScreen() {
     summaryLoading,
     loadSummary,
     recent,
+    loadRecent,
     trend,
   } = useDashboard();
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('This month');
@@ -71,7 +72,13 @@ export default function DashboardScreen() {
         <CalendarModal
           visible={calVisible}
           selectedMonth={selectedMonth}
-          onApply={(m) => { setSelectedMonth(m); setCalVisible(false); }}
+          onApply={({ from, to, label }) => {
+            setSelectedMonth(label);
+            setTimeFilter('Calendar');
+            setCalVisible(false);
+            loadSummary({ period: 'range', from, to });
+            loadRecent({ from, to });
+          }}
           onClose={() => setCalVisible(false)}
         />
       )}
