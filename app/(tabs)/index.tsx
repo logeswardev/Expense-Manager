@@ -67,12 +67,14 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <CalendarModal
-        visible={calVisible}
-        selectedMonth={selectedMonth}
-        onApply={(m) => { setSelectedMonth(m); setCalVisible(false); }}
-        onClose={() => setCalVisible(false)}
-      />
+      {calVisible && (
+        <CalendarModal
+          visible={calVisible}
+          selectedMonth={selectedMonth}
+          onApply={(m) => { setSelectedMonth(m); setCalVisible(false); }}
+          onClose={() => setCalVisible(false)}
+        />
+      )}
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Top App Bar */}
@@ -257,4 +259,3 @@ export default function DashboardScreen() {
     </SafeAreaView>
   );
 }
-

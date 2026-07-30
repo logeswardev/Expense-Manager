@@ -1,4 +1,5 @@
 const NOTION_API = 'https://api.notion.com/v1';
+const NOTION_VERSION = '2025-09-03';
 
 type VercelRequest = { method?: string; query: Record<string, string | string[] | undefined>; body?: unknown };
 type VercelResponse = { status: (code: number) => VercelResponse; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
@@ -14,7 +15,7 @@ async function notion(path: string, init: RequestInit = {}) {
     ...init,
     headers: {
       Authorization: `Bearer ${required('NOTION_TOKEN')}`,
-      'Notion-Version': process.env.NOTION_VERSION ?? '2025-09-03',
+      'Notion-Version': NOTION_VERSION,
       'Content-Type': 'application/json',
       ...init.headers,
     },
