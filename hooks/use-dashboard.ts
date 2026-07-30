@@ -12,9 +12,6 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 
 export function useDashboard() {
-  const [selectedMonth, setSelectedMonth] = useState('May');
-  const [calVisible, setCalVisible] = useState(false);
-
   // Profile
   const [me, setMe] = useState<MeResponse | null>(null);
 
@@ -46,10 +43,10 @@ export function useDashboard() {
     [],
   );
 
-  const loadRecent = useCallback(async (params: { from?: string; to?: string } = {}) => {
+  const loadRecent = useCallback(async (params: { limit?: number; from?: string; to?: string } = {}) => {
     setRecentLoading(true);
     try {
-      const data = await fetchRecentTransactions({ limit: 4, ...params });
+      const data = await fetchRecentTransactions({ limit: 20, ...params });
       setRecent(data.items ?? []);
     } catch (err) {
       console.warn('recent transactions failed', err);
@@ -76,11 +73,6 @@ export function useDashboard() {
   }, [loadSummary, loadRecent, loadTrend]);
 
   return {
-    selectedMonth,
-    setSelectedMonth,
-    calVisible,
-    setCalVisible,
-
     me,
 
     summary,

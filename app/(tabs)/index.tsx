@@ -1,5 +1,4 @@
 import ActivityCard from '@/components/activity-card';
-import CalendarModal from '@/components/calendar-modal';
 import { TIME_FILTERS, TimeFilter } from '@/constants/dashboard';
 import { Colors } from '@/constants/theme';
 import { useDashboard } from '@/hooks/use-dashboard';
@@ -16,9 +15,9 @@ const RING_STROKE = 10;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRC = 2 * Math.PI * RING_RADIUS;
 
-function todayIso() {
+function todayIso(date = new Date()) {
   // Local date (avoids UTC shifting the day).
-  const d = new Date();
+  const d = date;
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -31,10 +30,6 @@ function formatCad(value: number) {
 
 export default function DashboardScreen() {
   const {
-    selectedMonth,
-    setSelectedMonth,
-    calVisible,
-    setCalVisible,
     me,
     summary,
     summaryLoading,
@@ -49,12 +44,20 @@ export default function DashboardScreen() {
     if (timeFilter === 'Today') {
       const t = todayIso();
       loadSummary({ period: 'range', from: t, to: t });
+      loadRecent({ limit: 20, from: t, to: t });
     } else if (timeFilter === 'This week') {
       loadSummary({ period: 'week' });
+      const today = new Date();
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+      loadRecent({ limit: 20, from: todayIso(monday), to: todayIso() });
     } else if (timeFilter === 'This month') {
       loadSummary({ period: 'month' });
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      loadRecent({ limit: 20, from: todayIso(monthStart), to: todayIso() });
     }
-  }, [timeFilter, loadSummary]);
+  }, [timeFilter, loadSummary, loadRecent]);
 
   const usedPct = Math.min(1, Math.max(0, summary?.budget?.usedPct ?? 0));
   const trendDir = summary?.trend?.direction ?? 'flat';
@@ -68,21 +71,6 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {calVisible && (
-        <CalendarModal
-          visible={calVisible}
-          selectedMonth={selectedMonth}
-          onApply={({ from, to, label }) => {
-            setSelectedMonth(label);
-            setTimeFilter('Calendar');
-            setCalVisible(false);
-            loadSummary({ period: 'range', from, to });
-            loadRecent({ from, to });
-          }}
-          onClose={() => setCalVisible(false)}
-        />
-      )}
-
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Top App Bar */}
         <View style={styles.header}>
@@ -186,7 +174,6 @@ export default function DashboardScreen() {
                 style={[styles.chip, active && styles.chipActive]}
                 onPress={() => {
                   setTimeFilter(label);
-                  if (label === 'Calendar') setCalVisible(true);
                 }}>
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
               </TouchableOpacity>

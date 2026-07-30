@@ -17,7 +17,7 @@ export const MONTHS_FULL = [
 
 // --- Time filters ---
 
-export const TIME_FILTERS = ['Today', 'This week', 'This month', 'Calendar'] as const;
+export const TIME_FILTERS = ['Today', 'This week', 'This month'] as const;
 export type TimeFilter = (typeof TIME_FILTERS)[number];
 
 // --- Chart data (kept for legacy donut usage) ---
