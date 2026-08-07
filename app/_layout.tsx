@@ -38,6 +38,7 @@ export default function RootLayout() {
             headerShown: false,
           }}
         />
+        <Stack.Screen name="import-statement" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="dark" backgroundColor={Colors.bg} />
     </ThemeProvider>

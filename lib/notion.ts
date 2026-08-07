@@ -1,12 +1,14 @@
 const NOTION_API = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2025-09-03';
+const ENV = {
+  NOTION_TOKEN: process.env.NOTION_TOKEN,
+  NOTION_TRANSACTIONS_DATA_SOURCE_ID: process.env.NOTION_TRANSACTIONS_DATA_SOURCE_ID,
+  NOTION_DEFAULT_ACCOUNT: process.env.NOTION_DEFAULT_ACCOUNT,
+};
 
-type VercelRequest = { method?: string; query: Record<string, string | string[] | undefined>; body?: unknown };
-type VercelResponse = { status: (code: number) => VercelResponse; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
-
-function required(name: string) {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing Vercel environment variable: ${name}`);
+function required(name: keyof typeof ENV) {
+  const value = ENV[name];
+  if (!value) throw new Error(`Missing environment variable: ${name}`);
   return value;
 }
 
@@ -37,7 +39,27 @@ function parseTransaction(page: any) {
   };
 }
 
-async function queryTransactions(from?: string, to?: string) {
+export async function queryCategories() {
+  const dataSourceId = required('NOTION_TRANSACTIONS_DATA_SOURCE_ID');
+  const schema = await notion(`/data_sources/${dataSourceId}`);
+  const categorySource = await relationSource(schema, 'Categories');
+  const names: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const response = await notion(`/data_sources/${categorySource}/query`, {
+      method: 'POST',
+      body: JSON.stringify({ page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) }),
+    });
+    for (const item of response.results ?? []) {
+      const name = text(item.properties?.Name?.title);
+      if (name) names.push(name);
+    }
+    cursor = response.has_more ? response.next_cursor : undefined;
+  } while (cursor);
+  return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+}
+
+export async function queryTransactions(from?: string, to?: string) {
   const results: any[] = [];
   let cursor: string | undefined;
   do {
@@ -68,7 +90,7 @@ async function pageIdByName(dataSourceId: string, name: string) {
   return page.id;
 }
 
-async function createTransaction(input: any) {
+export async function createTransaction(input: any) {
   if (!input?.name?.trim() || !Number.isFinite(input.amount) || input.amount <= 0 || !input.category || !input.date) {
     throw new Error('Name, a positive amount, category, and date are required.');
   }
@@ -88,27 +110,9 @@ async function createTransaction(input: any) {
       parent: { data_source_id: dataSourceId },
       properties: {
         Name: { title: [{ text: { content: input.name.trim() } }] }, Date: { date: { start: input.date } },
-        Amount: { number: input.amount }, Type: { select: { name: input.type ?? 'expense' } },
+        Amount: { number: input.amount }, Type: { select: { name: String(input.type).toLowerCase() === 'income' ? 'Income' : 'Expense' } },
         Categories: { relation: [{ id: categoryId }] }, Accounts: { relation: [{ id: accountId }] }, Months: { relation: [{ id: monthId }] },
       },
     }),
   });
-}
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Cache-Control', 'no-store');
-  try {
-    if (req.method === 'GET') {
-      const from = Array.isArray(req.query.from) ? req.query.from[0] : req.query.from;
-      const to = Array.isArray(req.query.to) ? req.query.to[0] : req.query.to;
-      return res.status(200).json({ items: await queryTransactions(from, to) });
-    }
-    if (req.method === 'POST') {
-      await createTransaction(req.body);
-      return res.status(201).json({ message: 'Transaction created.' });
-    }
-    return res.status(405).json({ message: 'Method not allowed.' });
-  } catch (error) {
-    return res.status(500).json({ message: error instanceof Error ? error.message : 'Unexpected server error.' });
-  }
 }

@@ -58,7 +58,7 @@ export default function ActivityScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {calendarOpen && <CalendarModal visible selectedMonth={new Date().toLocaleString('en-US', { month: 'long' })} onClose={() => setCalendarOpen(false)} onApply={(value) => { setRange(value); setCalendarOpen(false); }} />}
-      <View style={styles.header}><View style={styles.headerLeft}><View style={styles.avatar}><Ionicons name="person" size={20} color={Colors.text} /></View><Text style={styles.greeting}>Activity</Text></View><TouchableOpacity style={styles.iconBtn}><Ionicons name="notifications-outline" size={20} color={Colors.primary} /></TouchableOpacity></View>
+      <View style={styles.header}><View style={styles.headerLeft}><View style={styles.avatar}><Ionicons name="person" size={20} color={Colors.text} /></View><Text style={styles.greeting}>Activity</Text></View><TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/import-statement' as any)}><Ionicons name="cloud-upload-outline" size={20} color={Colors.primary} /></TouchableOpacity></View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.searchBar}><Ionicons name="search" size={18} color={Colors.textSub} /><TextInput style={styles.searchInput} placeholder="Search transactions..." placeholderTextColor={Colors.textSub} value={search} onChangeText={setSearch} /></View>
         <TouchableOpacity style={styles.dateFilter} onPress={() => setCalendarOpen(true)}><Ionicons name="calendar-outline" size={18} color={Colors.primary} /><Text style={styles.dateFilterText}>{range?.label ?? 'All dates'}</Text><Ionicons name="chevron-down" size={16} color={Colors.textSub} /></TouchableOpacity>

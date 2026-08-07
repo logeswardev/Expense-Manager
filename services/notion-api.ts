@@ -38,3 +38,17 @@ export async function fetchNotionTransactions(params: { from?: string; to?: stri
 export async function createNotionTransaction(input: CreateTransactionInput) {
   await request('', { method: 'POST', body: JSON.stringify(input) });
 }
+
+export type StatementTransaction = { date: string; name: string; amount: number; type: 'expense' | 'income' };
+
+export async function previewStatementImport(transactions: StatementTransaction[]) {
+  return request('/import', { method: 'POST', body: JSON.stringify({ action: 'preview', transactions }) }) as Promise<{ items: StatementTransaction[]; skipped: number }>;
+}
+
+export async function commitStatementImport(transactions: StatementTransaction[], category: string) {
+  return request('/import', { method: 'POST', body: JSON.stringify({ action: 'commit', transactions, category }) }) as Promise<{ added: number; skipped: number }>;
+}
+
+export async function fetchStatementCategories(): Promise<string[]> {
+  return (await request('/categories')).items ?? [];
+}
