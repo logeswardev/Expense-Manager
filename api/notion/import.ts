@@ -1,4 +1,11 @@
-import { createTransaction, queryTransactions } from '@/lib/notion';
+import { createTransaction, queryTransactions } from '../../lib/notion';
+
+type VercelRequest = { method?: string; body?: unknown };
+type VercelResponse = {
+  status: (code: number) => VercelResponse;
+  json: (body: unknown) => void;
+  setHeader: (name: string, value: string) => void;
+};
 
 type ImportTransaction = { date: string; name: string; amount: number; type: 'expense' | 'income' };
 
@@ -25,33 +32,26 @@ async function missingTransactions(raw: unknown) {
   const dates = unique.map((transaction) => transaction.date).sort();
   const existing = await queryTransactions(dates[0], dates[dates.length - 1]);
   const existingKeys = new Set(existing.map(key));
-  return { items: unique.filter((transaction) => !existingKeys.has(key(transaction))), skipped: raw.length - unique.length };
+  return {
+    items: unique.filter((transaction) => !existingKeys.has(key(transaction))),
+    skipped: raw.length - unique.length,
+  };
 }
 
-export async function POST(request: Request) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed.' });
   try {
-    const body = (await request.json()) as { transactions?: unknown; category?: string; account?: string; action?: string };
+    const body = (req.body ?? {}) as { transactions?: unknown; category?: string; account?: string; action?: string };
     const comparison = await missingTransactions(body.transactions);
-    if (body.action === 'preview') {
-      return Response.json(comparison, { headers: { 'Cache-Control': 'no-store' } });
-    }
-    if (body.action !== 'commit') {
-      return Response.json({ message: 'Use preview or commit.' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
-    }
-    if (!body.category?.trim()) {
-      return Response.json({ message: 'Choose a Notion category for imported transactions.' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
-    }
+    if (body.action === 'preview') return res.status(200).json(comparison);
+    if (body.action !== 'commit') return res.status(400).json({ message: 'Use preview or commit.' });
+    if (!body.category?.trim()) return res.status(400).json({ message: 'Choose a Notion category for imported transactions.' });
     for (const transaction of comparison.items) {
       await createTransaction({ ...transaction, category: body.category, account: body.account });
     }
-    return Response.json(
-      { added: comparison.items.length, skipped: comparison.skipped },
-      { status: 201, headers: { 'Cache-Control': 'no-store' } },
-    );
+    return res.status(201).json({ added: comparison.items.length, skipped: comparison.skipped });
   } catch (error) {
-    return Response.json(
-      { message: error instanceof Error ? error.message : 'Could not import statement.' },
-      { status: 500, headers: { 'Cache-Control': 'no-store' } },
-    );
+    return res.status(500).json({ message: error instanceof Error ? error.message : 'Could not import statement.' });
   }
 }
