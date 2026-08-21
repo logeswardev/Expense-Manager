@@ -5,9 +5,11 @@
  * keeps the Notion token private and avoids the browser CORS limitation.
  */
 import {
-  createNotionTransaction,
-  fetchNotionTransactions,
-  type NotionTransaction,
+    createNotionTransaction,
+    fetchNotionRecurring,
+    fetchNotionTransactions,
+    type NotionRecurring,
+    type NotionTransaction,
 } from '@/services/notion-api';
 
 export type SummaryPeriod = 'today' | 'week' | 'month' | 'range';
@@ -165,4 +167,75 @@ export async function fetchTransactions(params: { from?: string; to?: string } =
 
 export async function addTransaction(input: CreateTransactionInput) {
   await createNotionTransaction({ ...input, type: input.type ?? 'expense' });
+}
+
+export interface CategoryTotal {
+  category: string;
+  amount: number;
+  pct: number;
+  count: number;
+}
+
+export async function fetchCategoryTotals(params: { from?: string; to?: string } = {}): Promise<{ totals: CategoryTotal[]; total: number }> {
+  const items = (await fetchNotionTransactions(params)).filter((item) => item.type.toLowerCase() === 'expense');
+  const map = new Map<string, { amount: number; count: number }>();
+  for (const item of items) {
+    const category = item.category || 'Uncategorized';
+    const bucket = map.get(category) ?? { amount: 0, count: 0 };
+    bucket.amount += item.amount;
+    bucket.count += 1;
+    map.set(category, bucket);
+  }
+  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  const totals = Array.from(map.entries())
+    .map(([category, bucket]) => ({
+      category,
+      amount: bucket.amount,
+      count: bucket.count,
+      pct: total > 0 ? Math.round((bucket.amount / total) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+  return { totals, total };
+}
+
+export interface RecurringItem {
+  id: string;
+  name: string;
+  amount: number;
+  date: string;
+  cycle: string;
+  category: string;
+  daysUntil: number | null;
+}
+
+function daysBetween(from: Date, to: Date) {
+  const utcFrom = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate());
+  const utcTo = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.round((utcTo - utcFrom) / 86_400_000);
+}
+
+export async function fetchRecurring(): Promise<{ items: RecurringItem[]; monthlyTotal: number }> {
+  const items = await fetchNotionRecurring();
+  const today = new Date();
+  const enriched = items
+    .map((item: NotionRecurring): RecurringItem => ({
+      id: item.id,
+      name: item.name || 'Recurring bill',
+      amount: item.amount,
+      date: item.date,
+      cycle: (item.cycle || 'MONTHLY').toUpperCase(),
+      category: item.category,
+      daysUntil: item.date ? daysBetween(today, new Date(`${item.date}T00:00:00`)) : null,
+    }))
+    .sort((a, b) => {
+      if (a.daysUntil == null) return 1;
+      if (b.daysUntil == null) return -1;
+      return a.daysUntil - b.daysUntil;
+    });
+  const monthlyTotal = enriched.reduce((sum, item) => {
+    if (item.cycle === 'YEARLY') return sum + item.amount / 12;
+    if (item.cycle === 'WEEKLY') return sum + item.amount * 4.33;
+    return sum + item.amount;
+  }, 0);
+  return { items: enriched, monthlyTotal };
 }

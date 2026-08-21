@@ -1,132 +1,201 @@
+import CalendarModal, { DateRange } from '@/components/calendar-modal';
+import InsightCard from '@/components/insight-card';
+import MonthYearPicker, { monthRange, MonthSelection } from '@/components/month-year-picker';
 import { Colors } from '@/constants/theme';
+import { fetchCategoryTotals, fetchRecurring, fetchSummary, type CategoryTotal } from '@/services/api';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
-
-const RING_SIZE = 128;
-const RING_STROKE = 12;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_CIRC = 2 * Math.PI * RING_RADIUS;
-
-const TOTAL_SPENT = 4280.5;
-const BUDGET = 5000;
-const USED_PCT = TOTAL_SPENT / BUDGET;
-
-const CATEGORIES = [
-  { id: 'c1', name: 'Food & Dining', amount: 1240, pct: 65 },
-  { id: 'c2', name: 'Groceries', amount: 840.2, pct: 42 },
-  { id: 'c3', name: 'Transport', amount: 320, pct: 28 },
-];
 
 function formatCad(value: number) {
-  return `$${value.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `$${(value ?? 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+const CATEGORY_PREVIEW = 3;
+
 export default function InsightsScreen() {
-  const remaining = BUDGET - TOTAL_SPENT;
+  const today = new Date();
+  const [month, setMonth] = useState<MonthSelection>(monthRange(today.getFullYear(), today.getMonth()));
+  const [range, setRange] = useState<DateRange>({ from: month.from, to: month.to, label: month.label });
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const [summary, setSummary] = useState<{ totalSpend: number; totalIncome: number; count: number } | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [categoryData, setCategoryData] = useState<{ totals: CategoryTotal[]; total: number } | null>(null);
+  const [categoryLoading, setCategoryLoading] = useState(true);
+  const [recurring, setRecurring] = useState<{ count: number; monthlyTotal: number; nextLabel: string | null } | null>(null);
+  const [recurringLoading, setRecurringLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setSummaryLoading(true);
+    setCategoryLoading(true);
+    setError(null);
+
+    Promise.all([
+      fetchSummary({ period: 'range', from: range.from, to: range.to }),
+      fetchCategoryTotals({ from: range.from, to: range.to }),
+    ])
+      .then(([summaryResponse, categoryResponse]) => {
+        if (!active) return;
+        setSummary({
+          totalSpend: summaryResponse.totalSpend,
+          totalIncome: summaryResponse.totalIncome,
+          count: summaryResponse.transactionCount,
+        });
+        setCategoryData(categoryResponse);
+      })
+      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'Could not load insights.'); })
+      .finally(() => { if (active) { setSummaryLoading(false); setCategoryLoading(false); } });
+
+    return () => { active = false; };
+  }, [range.from, range.to]);
+
+  useEffect(() => {
+    let active = true;
+    setRecurringLoading(true);
+    fetchRecurring()
+      .then((data) => {
+        if (!active) return;
+        const next = data.items.find((item) => item.daysUntil != null && item.daysUntil >= 0);
+        setRecurring({
+          count: data.items.length,
+          monthlyTotal: data.monthlyTotal,
+          nextLabel: next ? `${next.name} in ${next.daysUntil} day${next.daysUntil === 1 ? '' : 's'}` : null,
+        });
+      })
+      .catch(() => { if (active) setRecurring({ count: 0, monthlyTotal: 0, nextLabel: null }); })
+      .finally(() => { if (active) setRecurringLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  function applyMonth(selection: MonthSelection) {
+    setMonth(selection);
+    setRange({ from: selection.from, to: selection.to, label: selection.label });
+  }
+
+  function applyRange(next: DateRange) {
+    setRange(next);
+    setCalendarOpen(false);
+  }
+
+  const categoryPreview = useMemo(() => categoryData?.totals.slice(0, CATEGORY_PREVIEW) ?? [], [categoryData]);
+  const spendSubtitle = summary ? `${summary.count} transaction${summary.count === 1 ? '' : 's'}` : ' ';
+  const incomeSubtitle = summary && summary.totalIncome > 0 ? 'Tap to review income' : 'No income recorded';
+  const recurringSubtitle = recurring
+    ? recurring.count === 0
+      ? 'No recurring items'
+      : recurring.nextLabel ?? `${recurring.count} bill${recurring.count === 1 ? '' : 's'}`
+    : ' ';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <View style={styles.periodRow}>
-          <Text style={styles.periodLabel}>September 2023</Text>
-          <TouchableOpacity style={styles.periodChip}>
-            <Text style={styles.periodChipText}>Yearly</Text>
+      {calendarOpen && (
+        <CalendarModal
+          visible
+          selectedMonth={new Date().toLocaleString('en-US', { month: 'long' })}
+          onClose={() => setCalendarOpen(false)}
+          onApply={applyRange}
+        />
+      )}
+      <MonthYearPicker
+        visible={pickerOpen}
+        year={month.year}
+        monthIdx={month.monthIdx}
+        onClose={() => setPickerOpen(false)}
+        onSelect={applyMonth}
+      />
+
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Text style={styles.title}>Insights</Text>
+        <Text style={styles.subtitle}>Review your spending, income, and recurring bills.</Text>
+
+        <View style={styles.filterRow}>
+          <TouchableOpacity style={styles.filterChip} onPress={() => setCalendarOpen(true)}>
+            <Ionicons name="calendar-outline" size={16} color={Colors.primary} />
+            <Text style={styles.filterChipText} numberOfLines={1}>{range.label}</Text>
+            <Ionicons name="chevron-down" size={14} color={Colors.textSub} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.filterChip} onPress={() => setPickerOpen(true)}>
+            <Ionicons name="chevron-collapse-outline" size={16} color={Colors.primary} />
+            <Text style={styles.filterChipText} numberOfLines={1}>{month.label}</Text>
+            <Ionicons name="chevron-down" size={14} color={Colors.textSub} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.heroCard}>
-          <Text style={styles.heroLabel}>TOTAL SPENT</Text>
-          <Text style={styles.heroAmount}>{formatCad(TOTAL_SPENT)}</Text>
+        {error && <Text style={styles.error}>{error}</Text>}
 
-          <View style={styles.heroBottom}>
-            <View style={styles.ring}>
-              <Svg width={RING_SIZE} height={RING_SIZE}>
-                <Circle
-                  cx={RING_SIZE / 2}
-                  cy={RING_SIZE / 2}
-                  r={RING_RADIUS}
-                  stroke="rgba(255,255,255,0.15)"
-                  strokeWidth={RING_STROKE}
-                  fill="none"
-                />
-                <Circle
-                  cx={RING_SIZE / 2}
-                  cy={RING_SIZE / 2}
-                  r={RING_RADIUS}
-                  stroke="#FFFFFF"
-                  strokeWidth={RING_STROKE}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={RING_CIRC}
-                  strokeDashoffset={RING_CIRC * (1 - USED_PCT)}
-                  transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
-                />
-              </Svg>
-              <View style={[styles.ringLabel, { pointerEvents: 'none' }]}>
-                <Text style={styles.ringPct}>{Math.round(USED_PCT * 100)}%</Text>
-              </View>
-            </View>
+        <InsightCard
+          label="TOTAL SPENT"
+          icon="trending-down-outline"
+          amount={summary?.totalSpend ?? 0}
+          subtitle={spendSubtitle}
+          loading={summaryLoading}
+          onPress={() => router.push({ pathname: '/(tabs)/activity' as any, params: { from: range.from, to: range.to } })}
+        />
 
-            <View style={styles.budgetCol}>
-              <View style={styles.budgetRow}>
-                <Text style={styles.budgetLabel}>Budget</Text>
-                <Text style={styles.budgetValue}>{formatCad(BUDGET)}</Text>
-              </View>
-              <View style={styles.budgetTrack}>
-                <View style={[styles.budgetFill, { width: `${USED_PCT * 100}%` }]} />
-              </View>
-              <Text style={styles.budgetCaption}>You have {formatCad(remaining)} remaining</Text>
-            </View>
-          </View>
-        </View>
+        <InsightCard
+          label="TOTAL INCOME"
+          icon="trending-up-outline"
+          variant="income"
+          amount={summary?.totalIncome ?? 0}
+          subtitle={incomeSubtitle}
+          loading={summaryLoading}
+          onPress={() => router.push({ pathname: '/income' as any, params: { from: range.from, to: range.to } })}
+        />
+
+        <InsightCard
+          label="RECURRING EXPENSES"
+          icon="repeat-outline"
+          variant="recurring"
+          amount={recurring?.monthlyTotal ?? 0}
+          subtitle={recurringSubtitle}
+          loading={recurringLoading}
+          onPress={() => router.push('/recurring' as any)}
+        />
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Categories</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewDetails}>View Details</Text>
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: '/categories' as any, params: { from: range.from, to: range.to } })}
+          >
+            <Text style={styles.viewDetails}>View details</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.categoryCard}>
-          {CATEGORIES.map((cat, idx) => (
-            <View
-              key={cat.id}
-              style={[styles.catRow, idx < CATEGORIES.length - 1 && styles.catRowDivider]}>
-              <View style={{ flex: 1 }}>
-                <View style={styles.catTopRow}>
-                  <Text style={styles.catName}>{cat.name}</Text>
-                  <Text style={styles.catAmount}>{formatCad(cat.amount)}</Text>
-                </View>
-                <View style={styles.catBottomRow}>
-                  <View style={styles.catTrack}>
-                    <View style={[styles.catFill, { width: `${cat.pct}%` }]} />
+          {categoryLoading ? (
+            <ActivityIndicator color={Colors.primary} style={{ margin: 20 }} />
+          ) : categoryPreview.length === 0 ? (
+            <Text style={styles.empty}>No expenses in this range.</Text>
+          ) : (
+            categoryPreview.map((entry, index) => (
+              <View
+                key={entry.category}
+                style={[styles.catRow, index < categoryPreview.length - 1 && styles.catRowDivider]}
+              >
+                <View style={{ flex: 1 }}>
+                  <View style={styles.catTopRow}>
+                    <Text style={styles.catName}>{entry.category}</Text>
+                    <Text style={styles.catAmount}>{formatCad(entry.amount)}</Text>
                   </View>
-                  <Text style={styles.catPct}>{cat.pct}%</Text>
+                  <View style={styles.catBottomRow}>
+                    <View style={styles.catTrack}>
+                      <View style={[styles.catFill, { width: `${Math.min(100, entry.pct)}%` }]} />
+                    </View>
+                    <Text style={styles.catPct}>{entry.pct}%</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          ))}
+            ))
+          )}
         </View>
 
-        <TouchableOpacity
-          style={styles.recurringCard}
-          activeOpacity={0.85}
-          onPress={() => router.push('/subscriptions' as any)}>
-          <View style={styles.recurringLeft}>
-            <View>
-              <Text style={styles.recurringTitle}>Recurring Bills</Text>
-              <Text style={styles.recurringSub}>4 payments due this week</Text>
-            </View>
-          </View>
-          <View style={styles.recurringBtn}>
-            <Text style={styles.recurringBtnText}>Manage</Text>
-          </View>
-        </TouchableOpacity>
-
-        <View style={{ height: 24 }} />
+        <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -135,113 +204,24 @@ export default function InsightsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   scroll: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 },
-  periodRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  periodLabel: { fontSize: 18, fontWeight: '700', color: Colors.text },
-  periodChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.card,
-  },
-  periodChipText: { color: Colors.textSub, fontSize: 12, fontWeight: '600' },
-  heroCard: {
-    backgroundColor: Colors.primary,
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
-  },
-  heroLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  heroAmount: { color: '#FFFFFF', fontSize: 40, fontWeight: '800', letterSpacing: -0.5, marginTop: 4 },
-  heroBottom: { flexDirection: 'row', alignItems: 'center', gap: 24, marginTop: 24 },
-  ring: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
-  ringLabel: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  ringPct: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
-  budgetCol: { flex: 1, gap: 8 },
-  budgetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  budgetLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
-  budgetValue: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
-  budgetTrack: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  budgetFill: { height: '100%', backgroundColor: '#FFFFFF', borderRadius: 999 },
-  budgetCaption: { color: '#B3C5FF', fontSize: 12, fontWeight: '600' },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 28,
-    marginBottom: 12,
-  },
+  title: { fontSize: 24, fontWeight: '800', color: Colors.text },
+  subtitle: { fontSize: 13, color: Colors.textSub, marginTop: 4, marginBottom: 16 },
+  filterRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  filterChip: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: Colors.card, borderColor: Colors.border, borderWidth: 1, borderRadius: 12 },
+  filterChipText: { flex: 1, color: Colors.text, fontSize: 13, fontWeight: '600' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 12 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
-  viewDetails: { color: Colors.blue, fontSize: 12, fontWeight: '600' },
-  categoryCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
-  },
-  catRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  catRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.divider,
-  },
-  catTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+  viewDetails: { color: Colors.blue, fontSize: 13, fontWeight: '600' },
+  categoryCard: { backgroundColor: Colors.card, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
+  catRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
+  catRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.divider },
+  catTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   catName: { color: Colors.text, fontSize: 15, fontWeight: '700' },
   catAmount: { color: Colors.text, fontSize: 15, fontWeight: '700' },
   catBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  catTrack: {
-    flex: 1,
-    height: 6,
-    backgroundColor: Colors.cardAlt,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
+  catTrack: { flex: 1, height: 6, backgroundColor: Colors.cardAlt, borderRadius: 999, overflow: 'hidden' },
   catFill: { height: '100%', borderRadius: 999, backgroundColor: Colors.primary },
-  catPct: { color: Colors.textSub, fontSize: 12, fontWeight: '600', width: 32, textAlign: 'right' },
-  recurringCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(225,227,228,0.5)',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: Colors.border,
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 24,
-  },
-  recurringLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  recurringTitle: { color: Colors.text, fontSize: 15, fontWeight: '700' },
-  recurringSub: { color: Colors.textSub, fontSize: 12, marginTop: 2 },
-  recurringBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  recurringBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
+  catPct: { color: Colors.textSub, fontSize: 12, fontWeight: '600', width: 44, textAlign: 'right' },
+  empty: { padding: 20, color: Colors.textMuted, fontSize: 13, textAlign: 'center' },
+  error: { color: Colors.red, fontSize: 13, marginBottom: 12 },
 });

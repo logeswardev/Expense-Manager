@@ -4,6 +4,7 @@ const ENV = {
   NOTION_TOKEN: process.env.NOTION_TOKEN,
   NOTION_TRANSACTIONS_DATA_SOURCE_ID: process.env.NOTION_TRANSACTIONS_DATA_SOURCE_ID,
   NOTION_DEFAULT_ACCOUNT: process.env.NOTION_DEFAULT_ACCOUNT,
+  NOTION_RECURRING_DATA_SOURCE_ID: process.env.NOTION_RECURRING_DATA_SOURCE_ID,
 };
 
 function required(name: keyof typeof ENV) {
@@ -51,6 +52,51 @@ function parseTransaction(page: any) {
       rollupText(properties.Account) ||
       rollupText(properties.Accounts),
   };
+}
+
+function firstProperty(properties: any, names: string[]) {
+  for (const name of names) if (properties?.[name] !== undefined) return properties[name];
+  return null;
+}
+
+function selectName(property: any) {
+  return property?.select?.name ?? property?.status?.name ?? '';
+}
+
+function parseRecurring(page: any) {
+  const properties = page.properties ?? {};
+  const dateProperty = firstProperty(properties, ['Next Payment', 'Next Date', 'Next Due', 'Date', 'Due Date']);
+  return {
+    id: page.id,
+    name: text(properties.Name?.title),
+    amount: firstProperty(properties, ['Amount', 'Cost', 'Price'])?.number ?? 0,
+    date: dateProperty?.date?.start ?? '',
+    cycle: selectName(firstProperty(properties, ['Cycle', 'Frequency', 'Interval'])) || 'MONTHLY',
+    category:
+      text(properties['Display Categories']?.rollup?.array?.[0]?.title) ||
+      rollupText(properties.Categories) ||
+      selectName(properties.Category),
+    account:
+      rollupText(properties['Display Accounts']) ||
+      rollupText(properties.Account) ||
+      rollupText(properties.Accounts),
+  };
+}
+
+export async function queryRecurring() {
+  const dataSourceId = ENV.NOTION_RECURRING_DATA_SOURCE_ID;
+  if (!dataSourceId) return [] as ReturnType<typeof parseRecurring>[];
+  const results: any[] = [];
+  let cursor: string | undefined;
+  do {
+    const response = await notion(`/data_sources/${dataSourceId}/query`, {
+      method: 'POST',
+      body: JSON.stringify({ page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) }),
+    });
+    results.push(...(response.results ?? []));
+    cursor = response.has_more ? response.next_cursor : undefined;
+  } while (cursor);
+  return results.map(parseRecurring);
 }
 
 export async function queryCategories() {

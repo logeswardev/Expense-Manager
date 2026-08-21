@@ -53,3 +53,17 @@ export async function commitStatementImport(transactions: StatementTransaction[]
 export async function fetchStatementCategories(): Promise<string[]> {
   return (await request('/categories')).items ?? [];
 }
+
+export interface NotionRecurring {
+  id: string;
+  name: string;
+  amount: number;
+  date: string;
+  cycle: string;
+  category: string;
+  account?: string;
+}
+
+export async function fetchNotionRecurring(): Promise<NotionRecurring[]> {
+  return (await request('/recurring')).items ?? [];
+}

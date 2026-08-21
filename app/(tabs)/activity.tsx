@@ -2,7 +2,7 @@ import CalendarModal, { DateRange } from '@/components/calendar-modal';
 import { Colors } from '@/constants/theme';
 import { fetchTransactions, RecentTransaction } from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -51,6 +51,7 @@ function formatAmount(item: RecentTransaction) {
 }
 
 export default function ActivityScreen() {
+  const params = useLocalSearchParams<{ from?: string; to?: string }>();
   const [transactions, setTransactions] = useState<RecentTransaction[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('All');
@@ -59,6 +60,12 @@ export default function ActivityScreen() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (params.from && params.to) {
+      setRange({ from: params.from, to: params.to, label: `${params.from} – ${params.to}` });
+    }
+  }, [params.from, params.to]);
 
   useEffect(() => {
     let active = true;
