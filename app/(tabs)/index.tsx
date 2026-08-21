@@ -30,13 +30,11 @@ function formatCad(value: number) {
 
 export default function DashboardScreen() {
   const {
-    me,
     summary,
     summaryLoading,
     loadSummary,
     recent,
     loadRecent,
-    trend,
   } = useDashboard();
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('This month');
 
@@ -66,29 +64,9 @@ export default function DashboardScreen() {
   const trendSign = trendDir === 'up' ? '+' : trendDir === 'down' ? '-' : '';
   const trendIcon = trendDir === 'down' ? 'trending-down' : 'trending-up';
 
-  const trendMax = trend.reduce((m, p) => Math.max(m, p.amount), 0) || 1;
-  const trendBars = trend.slice(-5);
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Top App Bar */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={20} color={Colors.text} />
-            </View>
-            <View>
-              <Text style={styles.greeting}>{me?.greeting ?? 'Welcome'}</Text>
-              <Text style={styles.greetingSub}>Track your expenses easily</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Monthly Spend Hero Card */}
         <View style={styles.spendCard}>
           <View>
             <Text style={styles.spendLabel}>TOTAL SPEND</Text>
@@ -130,7 +108,7 @@ export default function DashboardScreen() {
                   transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
                 />
               </Svg>
-              <View style={styles.ringLabel} pointerEvents="none">
+              <View style={[styles.ringLabel, { pointerEvents: 'none' }]}>
                 <Text style={styles.ringPct}>{Math.round((summary?.budget?.usedPct ?? 0) * 100)}%</Text>
                 <Text style={styles.ringCaption}>BUDGET</Text>
               </View>
@@ -138,7 +116,6 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Mini Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <View style={styles.statIcon}>
@@ -161,7 +138,6 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Time filters */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -187,7 +163,6 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* Recent Activity */}
         <View style={styles.activityHeader}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
           <TouchableOpacity onPress={() => router.push('/(tabs)/activity' as any)}>
@@ -215,37 +190,6 @@ export default function DashboardScreen() {
               );
             })
           )}
-        </View>
-
-        {/* Smart Insights */}
-        <View style={styles.insightsCard}>
-          <View style={styles.insightsText}>
-            <Text style={styles.insightsTitle}>Smart Insights</Text>
-            <Text style={styles.insightsBody}>
-              Your spending on dining out is 15% higher than last month. Consider a meal plan to save up to $120.00.
-            </Text>
-            <TouchableOpacity style={styles.insightsBtn}>
-              <Text style={styles.insightsBtnText}>Go to Insights</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.miniChart}>
-            {(trendBars.length > 0
-              ? trendBars.map((p, i) => ({
-                  key: p.month,
-                  height: `${Math.max(10, Math.round((p.amount / trendMax) * 100))}%` as `${number}%`,
-                  opacity: i === trendBars.length - 1 ? 1 : 0.3 + i * 0.15,
-                }))
-              : [
-                  { key: 'b1', height: '30%' as const, opacity: 0.2 },
-                  { key: 'b2', height: '50%' as const, opacity: 0.4 },
-                  { key: 'b3', height: '80%' as const, opacity: 0.6 },
-                  { key: 'b4', height: '60%' as const, opacity: 1 },
-                  { key: 'b5', height: '40%' as const, opacity: 0.4 },
-                ]
-            ).map((b) => (
-              <View key={b.key} style={[styles.bar, { height: b.height, opacity: b.opacity }]} />
-            ))}
-          </View>
         </View>
 
         <View style={{ height: 24 }} />

@@ -5,6 +5,7 @@ export interface NotionTransaction {
   date: string;
   type: string;
   category: string;
+  account?: string;
 }
 
 type CreateTransactionInput = {

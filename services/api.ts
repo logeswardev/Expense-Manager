@@ -36,6 +36,7 @@ export interface RecentTransaction {
   type: 'expense' | 'income';
   amount: number;
   date: string;
+  account?: string;
 }
 
 export interface RecentTransactionsResponse {
@@ -102,6 +103,7 @@ function toRecent(item: NotionTransaction): RecentTransaction {
     type: item.type.toLowerCase() === 'income' ? 'income' : 'expense',
     amount: item.amount,
     date: item.date,
+    account: item.account || undefined,
   };
 }
 

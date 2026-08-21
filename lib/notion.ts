@@ -27,6 +27,16 @@ async function notion(path: string, init: RequestInit = {}) {
 }
 
 function text(node: any) { return node?.[0]?.plain_text ?? node?.[0]?.text?.content ?? ''; }
+
+function rollupText(property: any) {
+  const values = property?.rollup?.array;
+  if (!Array.isArray(values) || values.length === 0) return '';
+  return values
+    .map((entry) => text(entry?.title) || text(entry?.rich_text) || entry?.name || '')
+    .filter(Boolean)
+    .join(', ');
+}
+
 function parseTransaction(page: any) {
   const properties = page.properties ?? {};
   return {
@@ -36,6 +46,10 @@ function parseTransaction(page: any) {
     date: properties.Date?.date?.start ?? '',
     type: properties.Type?.select?.name ?? 'Expense',
     category: text(properties['Display Categories']?.rollup?.array?.[0]?.title),
+    account:
+      rollupText(properties['Display Accounts']) ||
+      rollupText(properties.Account) ||
+      rollupText(properties.Accounts),
   };
 }
 

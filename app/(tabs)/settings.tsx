@@ -1,137 +1,168 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Switch,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { Colors } from '@/constants/theme';
+import { fetchTransactions, RecentTransaction } from '@/services/api';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+type AccountSummary = {
+  name: string;
+  income: number;
+  expense: number;
+  net: number;
+  count: number;
+  recent: RecentTransaction[];
+};
 
-function SettingRow({
-  icon,
-  iconColor,
-  label,
-  value,
-  hasToggle,
-  toggleValue,
-  onPress,
-}: {
-  icon: IoniconsName;
-  iconColor: string;
-  label: string;
-  value?: string;
-  hasToggle?: boolean;
-  toggleValue?: boolean;
-  onPress?: () => void;
-}) {
+function formatCad(value: number) {
+  return `$${Math.abs(value).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function AccountCard({ item }: { item: AccountSummary }) {
+  const netPositive = item.net >= 0;
+
   return (
-    <TouchableOpacity style={styles.settingRow} onPress={onPress} activeOpacity={hasToggle ? 1 : 0.7}>
-      <View style={[styles.settingIcon, { backgroundColor: iconColor + '22' }]}>
-        <Ionicons name={icon} size={18} color={iconColor} />
+    <View style={styles.accountCard}>
+      <View style={styles.accountHeader}>
+        <View>
+          <Text style={styles.accountName}>{item.name}</Text>
+          <Text style={styles.accountMeta}>{item.count} transaction{item.count === 1 ? '' : 's'}</Text>
+        </View>
+        <View style={styles.accountBadge}>
+          <Ionicons name="wallet-outline" size={16} color={Colors.primary} />
+          <Text style={styles.accountBadgeText}>Tracked</Text>
+        </View>
       </View>
-      <Text style={styles.settingLabel}>{label}</Text>
-      <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        {value && <Text style={styles.settingValue}>{value}</Text>}
-        {hasToggle ? (
-          <Switch
-            value={toggleValue}
-            trackColor={{ true: Colors.green, false: Colors.border }}
-            thumbColor={Colors.text}
-          />
-        ) : (
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-        )}
+
+      <View style={styles.metricsRow}>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricLabel}>Money In</Text>
+          <Text style={[styles.metricValue, { color: Colors.income }]}>+{formatCad(item.income)}</Text>
+        </View>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricLabel}>Money Out</Text>
+          <Text style={[styles.metricValue, { color: Colors.red }]}>-{formatCad(item.expense)}</Text>
+        </View>
+        <View style={styles.metricBox}>
+          <Text style={styles.metricLabel}>Net Change</Text>
+          <Text style={[styles.metricValue, { color: netPositive ? Colors.income : Colors.red }]}>
+            {netPositive ? '+' : '-'}
+            {formatCad(item.net)}
+          </Text>
+        </View>
       </View>
-    </TouchableOpacity>
+
+      <View style={styles.transactionSection}>
+        <Text style={styles.transactionSectionTitle}>Recent account activity</Text>
+        {item.recent.map((transaction, index) => {
+          const income = transaction.type === 'income';
+          return (
+            <View
+              key={transaction.id}
+              style={[styles.transactionRow, index < item.recent.length - 1 && styles.transactionDivider]}>
+              <View style={[styles.transactionIcon, income && { backgroundColor: Colors.incomeBg }]}>
+                <Ionicons
+                  name={income ? 'arrow-down-outline' : 'arrow-up-outline'}
+                  size={16}
+                  color={income ? Colors.income : Colors.primary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.transactionName}>{transaction.merchant}</Text>
+                <Text style={styles.transactionMeta}>
+                  {transaction.category || 'Unknown'} • {transaction.date}
+                </Text>
+              </View>
+              <Text style={[styles.transactionAmount, { color: income ? Colors.income : Colors.red }]}>
+                {income ? '+' : '-'}
+                {formatCad(transaction.amount)}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
-export default function SettingsScreen() {
+export default function AccountsScreen() {
+  const [transactions, setTransactions] = useState<RecentTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+
+    fetchTransactions()
+      .then((items) => {
+        if (active) setTransactions(items);
+      })
+      .catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : 'Could not load account activity.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const accounts = useMemo(() => {
+    const groups = new Map<string, AccountSummary>();
+
+    for (const transaction of transactions) {
+      const key = transaction.account || 'Default Account';
+      const group = groups.get(key) ?? {
+        name: key,
+        income: 0,
+        expense: 0,
+        net: 0,
+        count: 0,
+        recent: [],
+      };
+
+      if (transaction.type === 'income') {
+        group.income += transaction.amount;
+        group.net += transaction.amount;
+      } else {
+        group.expense += transaction.amount;
+        group.net -= transaction.amount;
+      }
+
+      group.count += 1;
+      if (group.recent.length < 6) {
+        group.recent.push(transaction);
+      }
+
+      groups.set(key, group);
+    }
+
+    return Array.from(groups.values()).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [transactions]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* Header */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.logoBox}>
-              <Ionicons name="wallet-outline" size={18} color={Colors.green} />
-            </View>
-            <Text style={styles.logoText}>FinanceFlow</Text>
+          <Text style={styles.title}>Accounts</Text>
+          <Text style={styles.subtitle}>Track account-wise transaction flow from your Notion data.</Text>
+        </View>
+
+        {loading && <ActivityIndicator style={styles.loader} color={Colors.primary} />}
+        {error && <Text style={styles.empty}>{error}</Text>}
+
+        {!loading && !error && accounts.length === 0 && (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No account activity yet</Text>
+            <Text style={styles.emptyBody}>Transactions will appear here once your Notion records include account-linked entries.</Text>
           </View>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={18} color={Colors.text} />
-          </View>
-        </View>
+        )}
 
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.profileAvatar}>
-            <Ionicons name="person" size={32} color={Colors.text} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.profileName}>Alex Johnson</Text>
-            <Text style={styles.profileEmail}>alex.johnson@email.com</Text>
-          </View>
-          <TouchableOpacity style={styles.editProfileBtn}>
-            <Text style={styles.editProfileText}>Edit</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Account */}
-        <Text style={styles.groupLabel}>Account</Text>
-        <View style={styles.settingsGroup}>
-          <SettingRow icon="person-outline" iconColor={Colors.blue} label="Personal Info" />
-          <View style={styles.divider} />
-          <SettingRow icon="wallet-outline" iconColor={Colors.green} label="Payment Methods" />
-          <View style={styles.divider} />
-          <SettingRow icon="shield-checkmark-outline" iconColor={Colors.teal} label="Security" />
-        </View>
-
-        {/* Preferences */}
-        <Text style={styles.groupLabel}>Preferences</Text>
-        <View style={styles.settingsGroup}>
-          <SettingRow icon="notifications-outline" iconColor={Colors.amber} label="Notifications" hasToggle toggleValue={true} />
-          <View style={styles.divider} />
-          <SettingRow icon="moon-outline" iconColor={Colors.blue} label="Dark Mode" hasToggle toggleValue={true} />
-          <View style={styles.divider} />
-          <SettingRow icon="language-outline" iconColor={Colors.teal} label="Currency" value="USD ($)" />
-        </View>
-
-        {/* Data */}
-        <Text style={styles.groupLabel}>Data</Text>
-        <View style={styles.settingsGroup}>
-          <SettingRow icon="cloud-upload-outline" iconColor={Colors.green} label="Export Data" />
-          <View style={styles.divider} />
-          <SettingRow icon="refresh-outline" iconColor={Colors.amber} label="Sync Accounts" value="Just now" />
-          <View style={styles.divider} />
-          <SettingRow icon="trash-outline" iconColor={Colors.red} label="Delete All Data" />
-        </View>
-
-        {/* Subscription */}
-        <Text style={styles.groupLabel}>Subscriptions</Text>
-        <View style={styles.settingsGroup}>
-          <SettingRow
-            icon="repeat-outline"
-            iconColor={Colors.teal}
-            label="Manage Subscriptions"
-            onPress={() => router.push('/subscriptions' as any)}
-          />
-        </View>
-
-        {/* Sign out */}
-        <TouchableOpacity style={styles.signOutBtn}>
-          <Ionicons name="log-out-outline" size={20} color={Colors.red} />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.version}>FinanceFlow v1.0.0</Text>
+        {!loading && !error && accounts.map((account) => <AccountCard key={account.name} item={account} />)}
       </ScrollView>
     </SafeAreaView>
   );
@@ -139,30 +170,82 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoBox: { width: 34, height: 34, borderRadius: 8, backgroundColor: Colors.cardAlt, alignItems: 'center', justifyContent: 'center' },
-  logoText: { fontSize: 18, fontWeight: '700', color: Colors.text },
-  avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.cardAlt, alignItems: 'center', justifyContent: 'center' },
-
-  profileCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: 16, padding: 16, marginHorizontal: 20, marginBottom: 24, borderWidth: 1, borderColor: Colors.border, gap: 14 },
-  profileAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.cardAlt, alignItems: 'center', justifyContent: 'center' },
-  profileName: { color: Colors.text, fontSize: 16, fontWeight: '700', marginBottom: 2 },
-  profileEmail: { color: Colors.textMuted, fontSize: 13 },
-  editProfileBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
-  editProfileText: { color: Colors.textSub, fontSize: 13, fontWeight: '600' },
-
-  groupLabel: { color: Colors.textMuted, fontSize: 12, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', paddingHorizontal: 20, marginBottom: 8 },
-
-  settingsGroup: { backgroundColor: Colors.card, borderRadius: 16, marginHorizontal: 20, marginBottom: 20, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
-  settingRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, gap: 12 },
-  settingIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  settingLabel: { color: Colors.text, fontSize: 15, fontWeight: '500' },
-  settingValue: { color: Colors.textMuted, fontSize: 14 },
-  divider: { height: 1, backgroundColor: Colors.border + '66', marginLeft: 64 },
-
-  signOutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginHorizontal: 20, paddingVertical: 16, backgroundColor: Colors.red + '15', borderRadius: 14, borderWidth: 1, borderColor: Colors.red + '30', marginBottom: 16 },
-  signOutText: { color: Colors.red, fontSize: 16, fontWeight: '600' },
-  version: { textAlign: 'center', color: Colors.textMuted, fontSize: 12 },
+  scroll: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 32 },
+  header: { marginBottom: 20 },
+  title: { fontSize: 28, fontWeight: '800', color: Colors.text, marginBottom: 6 },
+  subtitle: { color: Colors.textSub, fontSize: 14, lineHeight: 20 },
+  loader: { marginTop: 40 },
+  empty: { color: Colors.textSub, textAlign: 'center', marginTop: 32, fontSize: 14 },
+  emptyCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+  },
+  emptyTitle: { color: Colors.text, fontSize: 17, fontWeight: '700', marginBottom: 6 },
+  emptyBody: { color: Colors.textSub, fontSize: 14, lineHeight: 20 },
+  accountCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 18,
+    marginBottom: 16,
+  },
+  accountHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 18,
+  },
+  accountName: { color: Colors.text, fontSize: 20, fontWeight: '800' },
+  accountMeta: { color: Colors.textSub, fontSize: 13, marginTop: 4 },
+  accountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.cardAlt,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  accountBadgeText: { color: Colors.text, fontSize: 12, fontWeight: '600' },
+  metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
+  metricBox: {
+    flex: 1,
+    backgroundColor: Colors.cardDark,
+    borderRadius: 16,
+    padding: 12,
+  },
+  metricLabel: { color: Colors.textSub, fontSize: 11, fontWeight: '700', marginBottom: 6, letterSpacing: 0.4 },
+  metricValue: { color: Colors.text, fontSize: 15, fontWeight: '800' },
+  transactionSection: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: 16,
+  },
+  transactionSectionTitle: { color: Colors.text, fontSize: 14, fontWeight: '700', marginBottom: 10 },
+  transactionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  transactionDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.divider,
+  },
+  transactionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.cardAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transactionName: { color: Colors.text, fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  transactionMeta: { color: Colors.textSub, fontSize: 12 },
+  transactionAmount: { fontSize: 15, fontWeight: '800' },
 });
