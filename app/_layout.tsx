@@ -38,6 +38,9 @@ export default function RootLayout() {
             headerShown: false,
           }}
         />
+        <Stack.Screen name="income" options={{ headerShown: false }} />
+        <Stack.Screen name="categories" options={{ headerShown: false }} />
+        <Stack.Screen name="recurring" options={{ headerShown: false }} />
         <Stack.Screen name="import-statement" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="dark" backgroundColor={Colors.bg} />

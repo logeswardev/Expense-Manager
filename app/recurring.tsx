@@ -1,7 +1,8 @@
 import { Colors } from '@/constants/theme';
+import MonthYearPicker, { MonthSelection, monthRange } from '@/components/month-year-picker';
 import { fetchRecurring, RecurringItem } from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,8 +24,18 @@ function dueLabel(days: number | null) {
 }
 
 export default function RecurringScreen() {
+  const params = useLocalSearchParams<{ year?: string; monthIdx?: string }>();
+  const today = new Date();
+  const initialYear = Number(params.year);
+  const initialMonthIdx = Number(params.monthIdx);
+  const [month, setMonth] = useState<MonthSelection>(
+    monthRange(
+      Number.isFinite(initialYear) ? initialYear : today.getFullYear(),
+      Number.isFinite(initialMonthIdx) ? initialMonthIdx : today.getMonth(),
+    ),
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [items, setItems] = useState<RecurringItem[]>([]);
-  const [monthlyTotal, setMonthlyTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,33 +43,34 @@ export default function RecurringScreen() {
     let active = true;
     setLoading(true); setError(null);
     fetchRecurring()
-      .then((data) => { if (active) { setItems(data.items); setMonthlyTotal(data.monthlyTotal); } })
+      .then((data) => { if (active) { setItems(data.items); } })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'Could not load recurring items.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
 
-  const groups = useMemo(() => {
-    const buckets = new Map<string, RecurringItem[]>();
-    for (const item of items) {
-      const key = item.date ? item.date.slice(0, 7) : 'undated';
-      const list = buckets.get(key) ?? [];
-      list.push(item);
-      buckets.set(key, list);
-    }
-    return Array.from(buckets.entries())
-      .sort(([a], [b]) => (a === 'undated' ? 1 : b === 'undated' ? -1 : a.localeCompare(b)))
-      .map(([key, list]) => ({
-        key,
-        label: key === 'undated'
-          ? 'No date set'
-          : new Date(`${key}-01T00:00:00`).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' }),
-        items: list.sort((a, b) => (a.daysUntil ?? Infinity) - (b.daysUntil ?? Infinity)),
-      }));
-  }, [items]);
+  const monthKey = `${month.year}-${String(month.monthIdx + 1).padStart(2, '0')}`;
+  const filteredItems = useMemo(
+    () =>
+      items
+        .filter((item) => item.date?.slice(0, 7) === monthKey)
+        .sort((a, b) => (a.daysUntil ?? Infinity) - (b.daysUntil ?? Infinity)),
+    [items, monthKey],
+  );
+  const monthlyTotal = useMemo(
+    () => filteredItems.reduce((sum, item) => sum + item.amount, 0),
+    [filteredItems],
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <MonthYearPicker
+        visible={pickerOpen}
+        year={month.year}
+        monthIdx={month.monthIdx}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(selection) => setMonth(selection)}
+      />
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={Colors.text} />
@@ -68,29 +80,35 @@ export default function RecurringScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <TouchableOpacity style={styles.monthChip} onPress={() => setPickerOpen(true)}>
+          <Ionicons name="calendar-outline" size={16} color={Colors.primary} />
+          <Text style={styles.monthChipText}>{month.label}</Text>
+          <Ionicons name="chevron-down" size={14} color={Colors.textSub} />
+        </TouchableOpacity>
+
         <View style={styles.totalCard}>
-          <Text style={styles.totalLabel}>MONTHLY COMMITMENT</Text>
+          <Text style={styles.totalLabel}>RECURRING PAYMENTS</Text>
           <Text style={styles.totalAmount}>{formatCad(monthlyTotal)}</Text>
-          <Text style={styles.totalMeta}>{items.length} recurring item{items.length === 1 ? '' : 's'}</Text>
+          <Text style={styles.totalMeta}>{filteredItems.length} recurring item{filteredItems.length === 1 ? '' : 's'} in {month.label}</Text>
         </View>
 
         {loading && <ActivityIndicator style={styles.loader} color={Colors.primary} />}
         {error && <Text style={styles.empty}>{error}</Text>}
-        {!loading && !error && items.length === 0 && (
+        {!loading && !error && filteredItems.length === 0 && (
           <Text style={styles.empty}>
-            No recurring items found. Set NOTION_RECURRING_DATA_SOURCE_ID and populate the Notion database to see items here.
+            No recurring items found for {month.label}.
           </Text>
         )}
 
-        {!loading && !error && groups.map((group) => (
-          <View key={group.key} style={styles.group}>
-            <Text style={styles.groupTitle}>{group.label}</Text>
+        {!loading && !error && filteredItems.length > 0 && (
+          <View style={styles.group}>
+            <Text style={styles.groupTitle}>{month.label}</Text>
             <View style={styles.list}>
-              {group.items.map((item, index) => {
+              {filteredItems.map((item, index) => {
                 const overdue = item.daysUntil != null && item.daysUntil < 0;
                 const soon = item.daysUntil != null && item.daysUntil >= 0 && item.daysUntil <= 7;
                 return (
-                  <View key={item.id} style={[styles.row, index < group.items.length - 1 && styles.rowDivider]}>
+                  <View key={item.id} style={[styles.row, index < filteredItems.length - 1 && styles.rowDivider]}>
                     <View style={[styles.rowIcon, overdue && { backgroundColor: Colors.redLight }]}>
                       <Ionicons
                         name={overdue ? 'alert-circle-outline' : 'repeat-outline'}
@@ -121,7 +139,7 @@ export default function RecurringScreen() {
               })}
             </View>
           </View>
-        ))}
+        )}
 
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -135,6 +153,8 @@ const styles = StyleSheet.create({
   headerBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 18, fontWeight: '800', color: Colors.text },
   scroll: { paddingHorizontal: 20 },
+  monthChip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, marginBottom: 12 },
+  monthChipText: { flex: 1, color: Colors.text, fontSize: 14, fontWeight: '600' },
   totalCard: { backgroundColor: Colors.amber, borderRadius: 24, padding: 24, marginBottom: 20 },
   totalLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
   totalAmount: { color: '#FFFFFF', fontSize: 36, fontWeight: '800', marginTop: 6 },

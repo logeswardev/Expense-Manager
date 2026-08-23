@@ -61,17 +61,20 @@ export default function InsightsScreen() {
     fetchRecurring()
       .then((data) => {
         if (!active) return;
-        const next = data.items.find((item) => item.daysUntil != null && item.daysUntil >= 0);
+        const monthKey = `${month.year}-${String(month.monthIdx + 1).padStart(2, '0')}`;
+        const monthItems = data.items.filter((item) => item.date?.slice(0, 7) === monthKey);
+        const next = monthItems.find((item) => item.daysUntil != null && item.daysUntil >= 0);
+        const monthlyTotal = monthItems.reduce((sum, item) => sum + item.amount, 0);
         setRecurring({
-          count: data.items.length,
-          monthlyTotal: data.monthlyTotal,
+          count: monthItems.length,
+          monthlyTotal,
           nextLabel: next ? `${next.name} in ${next.daysUntil} day${next.daysUntil === 1 ? '' : 's'}` : null,
         });
       })
       .catch(() => { if (active) setRecurring({ count: 0, monthlyTotal: 0, nextLabel: null }); })
       .finally(() => { if (active) setRecurringLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [month.monthIdx, month.year]);
 
   function applyMonth(selection: MonthSelection) {
     setMonth(selection);
@@ -89,7 +92,7 @@ export default function InsightsScreen() {
   const recurringSubtitle = recurring
     ? recurring.count === 0
       ? 'No recurring items'
-      : recurring.nextLabel ?? `${recurring.count} bill${recurring.count === 1 ? '' : 's'}`
+      : recurring.nextLabel ?? `${recurring.count} bill${recurring.count === 1 ? '' : 's'} in ${month.label}`
     : ' ';
 
   return (
@@ -155,7 +158,12 @@ export default function InsightsScreen() {
           amount={recurring?.monthlyTotal ?? 0}
           subtitle={recurringSubtitle}
           loading={recurringLoading}
-          onPress={() => router.push('/recurring' as any)}
+          onPress={() =>
+            router.push({
+              pathname: '/recurring' as any,
+              params: { year: String(month.year), monthIdx: String(month.monthIdx) },
+            })
+          }
         />
 
         <View style={styles.sectionHeader}>
